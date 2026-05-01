@@ -1,0 +1,184 @@
+name: Sync to Vault
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'transacciones.json'
+
+  workflow_dispatch:
+
+jobs:
+  sync-to-vault:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout public repo
+        uses: actions/checkout@v4
+
+      - name: Checkout private vault
+        uses: actions/checkout@v4
+        with:
+          repository: alvaaroogc/Obsidiana
+          token: ${{ secrets.VAULT_TOKEN }}
+          path: vault
+
+      - name: Sync changes to vault
+        run: |
+          python3 << 'EOF'
+          import json, os, re
+
+          # Read the updated JSON from public repo
+          with open("transacciones.json", "r", encoding="utf-8") as f:
+              new_txs = json.load(f)
+
+          SAP_DIR = "vault/01-SAP"
+
+          # Build index of existing .md files by codigo
+          existing = {}
+          for root, dirs, files in os.walk(SAP_DIR):
+              for fname in files:
+                  if fname.startswith("TX-") and fname.endswith(".md"):
+                      path = os.path.join(root, fname)
+                      with open(path, "r", encoding="utf-8") as f:
+                          content = f.read()
+                      match = re.search(r"^---\n(.*?)\n---", content, re.DOTALL)
+                      if match:
+                          fm = {}
+                          for line in match.group(1).split("\n"):
+                              if ":" in line and not line.startswith(" "):
+                                  k, *rest = line.split(":")
+                                  val = ":".join(rest).strip().strip('"')
+                                  if val:
+                                      fm[k.strip()] = val
+                          codigo = fm.get("codigo", "").strip()
+                          if codigo:
+                              existing[codigo] = {
+                                  "path": path,
+                                  "content": content,
+                                  "fm": fm,
+                                  "dir": root,
+                                  "filename": fname
+                              }
+
+          # Map of expected module folders
+          MOD_FOLDERS = {
+              "FI": "FI", "FI-AA": "FI-AA", "CO": "CO", "MM": "MM",
+              "SD": "SD", "PP": "PP", "PS": "PS", "EAM": "EAM",
+              "SYST": "SYST", "DRC": "DRC", "CUSTO": "CUSTO"
+          }
+
+          new_codes = set()
+          created = 0
+          updated = 0
+          deleted = 0
+
+          for tx in new_txs:
+              codigo = tx["codigo"]
+              new_codes.add(codigo)
+              modulo = tx.get("modulo", "")
+              nombre = tx.get("nombre", "")
+              submodulo = tx.get("submodulo", "")
+              estado = tx.get("estado", "borrador")
+
+              folder = MOD_FOLDERS.get(modulo, modulo)
+              dest_dir = os.path.join(SAP_DIR, folder)
+              os.makedirs(dest_dir, exist_ok=True)
+
+              safe_nombre = re.sub(r'[/\\:*?"<>|]', '-', nombre).strip()
+              filename = f"TX-{codigo} - {safe_nombre}.md" if safe_nombre else f"TX-{codigo} - .md"
+
+              if codigo in existing:
+                  old = existing[codigo]
+                  old_fm = old["fm"]
+                  # Check if anything changed
+                  changed = (
+                      old_fm.get("nombre", "") != nombre or
+                      old_fm.get("modulo", "") != modulo or
+                      old_fm.get("submodulo", "") != submodulo or
+                      old_fm.get("estado", "") != estado
+                  )
+                  if changed:
+                      # Update frontmatter in existing file, preserve body
+                      content = old["content"]
+                      # Replace individual fields in frontmatter
+                      def replace_fm_field(content, field, value):
+                          pattern = rf'^({field}:\s*).*$'
+                          replacement = rf'\g<1>{value}'
+                          return re.sub(pattern, replacement, content, count=1, flags=re.MULTILINE)
+
+                      content = replace_fm_field(content, "nombre", f'"{nombre}"')
+                      content = replace_fm_field(content, "modulo", modulo)
+                      content = replace_fm_field(content, "submodulo", submodulo)
+                      content = replace_fm_field(content, "estado", estado)
+
+                      # If module changed, move file
+                      new_path = os.path.join(dest_dir, filename)
+                      old_path = old["path"]
+
+                      if old_path != new_path:
+                          os.remove(old_path)
+                          with open(new_path, "w", encoding="utf-8") as f:
+                              f.write(content)
+                      else:
+                          with open(old_path, "w", encoding="utf-8") as f:
+                              f.write(content)
+
+                      updated += 1
+                      print(f"  Updated: TX-{codigo}")
+              else:
+                  # Create new file
+                  from datetime import date
+                  hoy = date.today().isoformat()
+                  lines = [
+                      "---",
+                      "tipo: transaccion",
+                      f'codigo: "{codigo}"',
+                      f'nombre: "{nombre}"',
+                      f"modulo: {modulo}",
+                      f"submodulo: {submodulo}",
+                      f"estado: {estado}",
+                      "tags:",
+                      "  - sap",
+                      "  - transaccion",
+                      f'  - {modulo.lower().replace("-", "_")}',
+                      f'fecha_creacion: "{hoy}"',
+                      "origen: sync-remoto",
+                      "---",
+                      "",
+                      f"# TX-{codigo} - {nombre}",
+                      "",
+                      nombre if nombre else "_Pendiente de descripcion._",
+                      "",
+                      "| Campo | Valor |",
+                      "|-------|-------|",
+                      f"| Codigo | `{codigo}` |",
+                      f"| Modulo | {modulo} |",
+                      f"| Submodulo | {submodulo} |",
+                      "",
+                  ]
+                  filepath = os.path.join(dest_dir, filename)
+                  with open(filepath, "w", encoding="utf-8") as f:
+                      f.write("\n".join(lines))
+                  created += 1
+                  print(f"  Created: TX-{codigo}")
+
+          # Delete files that are no longer in JSON
+          for codigo, info in existing.items():
+              if codigo not in new_codes:
+                  os.remove(info["path"])
+                  deleted += 1
+                  print(f"  Deleted: TX-{codigo}")
+
+          print(f"\nSummary: {created} created, {updated} updated, {deleted} deleted")
+          EOF
+
+      - name: Push changes to vault
+        run: |
+          cd vault
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git add -A
+          git diff --cached --quiet && echo "No changes to commit" && exit 0
+          git commit -m "Sync from Explorer - $(date -u '+%Y-%m-%d %H:%M')"
+          git push
