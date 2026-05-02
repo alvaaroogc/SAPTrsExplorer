@@ -813,8 +813,8 @@
   },
   {
     "codigo": "SQVI",
-    "nombre": "",
-    "modulo": "",
+    "nombre": "Crear reporte Z (no ABAP)",
+    "modulo": "CUSTO",
     "submodulo": "",
     "estado": "importado"
   },
