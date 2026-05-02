@@ -826,6 +826,13 @@
     "estado": "borrador"
   },
   {
+    "codigo": "TEST06",
+    "nombre": "TEST06",
+    "modulo": "FI",
+    "submodulo": "",
+    "estado": "borrador"
+  },
+  {
     "codigo": "VA01",
     "nombre": "Crear pedido de venta",
     "modulo": "SD",
