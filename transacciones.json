@@ -198,7 +198,7 @@
   {
     "codigo": "F010",
     "nombre": "Arrastre saldos interlocutores",
-    "modulo": "",
+    "modulo": "FI",
     "submodulo": "",
     "estado": "importado"
   },
