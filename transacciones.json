@@ -79,8 +79,8 @@
   {
     "codigo": "ASMN",
     "nombre": "Usuario de activos fijos",
-    "modulo": "",
-    "submodulo": "",
+    "modulo": "FI",
+    "submodulo": "FI-AA",
     "estado": "importado"
   },
   {
