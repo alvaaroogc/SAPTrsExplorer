@@ -819,13 +819,6 @@
     "estado": "importado"
   },
   {
-    "codigo": "TEST05",
-    "nombre": "TEST05",
-    "modulo": "FI",
-    "submodulo": "",
-    "estado": "borrador"
-  },
-  {
     "codigo": "TEST06",
     "nombre": "TEST06",
     "modulo": "FI",
