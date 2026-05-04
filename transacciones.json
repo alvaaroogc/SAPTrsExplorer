@@ -1,5 +1,12 @@
 [
   {
+    "codigo": "AB01L",
+    "nombre": "Registrar movimiento de activo fijo",
+    "modulo": "FI",
+    "submodulo": "FI-AA",
+    "estado": "borrador"
+  },
+  {
     "codigo": "ABLDT",
     "nombre": "Contabilizar valores de transferencia",
     "modulo": "FI",
